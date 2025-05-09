@@ -1,0 +1,24 @@
+# 应用配置模板
+# 请复制此文件为application.properties并填写实际值
+
+# 图片存储配置
+image.storage.path=/diary-server/images/
+
+# 微信小程序配置
+# 请替换为实际的小程序appid和secret
+wx.appid=请填写你的小程序appid
+wx.secret=请填写你的小程序secret
+wx.jscode2session.url=https://api.weixin.qq.com/sns/jscode2session
+
+# JWT配置
+# 请设置一个安全的JWT密钥
+jwt.secret=请设置一个安全的JWT密钥
+# 24小时
+jwt.expiration=86400
+
+# 允许所有网络接口访问（如公网部署）
+server.address=0.0.0.0
+# 服务器端口配置
+server.port=8080
+# 服务器端口配置
+server.port=8080

@@ -2,6 +2,10 @@ package wy.diary.server;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import wy.diary.server.util.TokenInterceptor;
 
 @SpringBootApplication
 public class ServerApplication {
@@ -10,4 +14,15 @@ public class ServerApplication {
 		SpringApplication.run(ServerApplication.class, args);
 	}
 
+    @Bean
+    public WebMvcConfigurer webMvcConfigurer(TokenInterceptor tokenInterceptor) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(tokenInterceptor)
+                        .addPathPatterns("/api/**") // 应用到所有以 /api 开头的请求
+                        .excludePathPatterns("/api/login"); // 排除登录接口
+            }
+        };
+    }
 }
