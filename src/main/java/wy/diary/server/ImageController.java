@@ -1,6 +1,9 @@
 package wy.diary.server;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import wy.diary.server.model.ApiResponse;
@@ -141,6 +144,82 @@ public class ImageController {
             
         } catch (Exception e) {
             return ApiResponse.error("删除图片失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取图片接口
+     * @param fileName 图片文件名
+     * @param openid 用户OpenID (由拦截器注入)
+     * @return 图片数据流
+     */
+    @GetMapping("/view")
+    public ResponseEntity<byte[]> getImage(@RequestParam("file") String fileName,
+                                          @RequestParam("id") String openid) {
+        try {
+            // 从文件名中提取年份（假设文件名格式为：yyyyMMdd_HHmmss_diaryId.ext）
+            String year = ""; 
+            if (fileName.length() >= 8) {
+                year = fileName.substring(0, 4); // 从文件名中获取年份
+            } else {
+                // 若文件名不符合预期格式，使用当前年份
+                year = String.valueOf(Year.now().getValue());
+            }
+            
+            // 构建完整的文件路径
+            String imagePath = storagePath + openid + "/" + year + "/" + fileName;
+            Path filePath = Paths.get(imagePath);
+            
+            // 如果文件不存在，直接返回404错误
+            if (!Files.exists(filePath)) {
+                return ResponseEntity
+                        .status(HttpStatus.NOT_FOUND)
+                        .body("图片不存在".getBytes());
+            }
+            
+            // 读取图片数据
+            byte[] imageData = Files.readAllBytes(filePath);
+            
+            // 确定图片的 MIME 类型
+            String mimeType = determineContentType(fileName);
+            
+            // 返回带有适当内容类型的响应
+            return ResponseEntity
+                    .ok()
+                    .contentType(MediaType.parseMediaType(mimeType))
+                    .contentLength(imageData.length)
+                    .body(imageData);
+            
+        } catch (Exception e) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(("获取图片失败: " + e.getMessage()).getBytes());
+        }
+    }
+
+    /**
+     * 根据文件扩展名确定内容类型
+     * @param filePath 文件路径
+     * @return MIME类型
+     */
+    private String determineContentType(String filePath) {
+        String extension = filePath.substring(filePath.lastIndexOf(".") + 1).toLowerCase();
+        switch (extension) {
+            case "png":
+                return "image/png";
+            case "jpg":
+            case "jpeg":
+                return "image/jpeg";
+            case "gif":
+                return "image/gif";
+            case "bmp":
+                return "image/bmp";
+            case "webp":
+                return "image/webp";
+            case "svg":
+                return "image/svg+xml";
+            default:
+                return "application/octet-stream";
         }
     }
 }

@@ -56,6 +56,7 @@ public class DiaryController {
             diaryJson.put("logWeek", diaryDto.getLogWeek());
             diaryJson.put("logLunar", diaryDto.getLogLunar());
             diaryJson.put("address", diaryDto.getAddress());
+            diaryJson.put("diaryId", diaryDto.getDiaryId());
             diaryJson.put("imageUrls", diaryDto.getImageUrls());
             
             json.put(fullKey, diaryJson);
@@ -81,5 +82,233 @@ public class DiaryController {
         data.put("diaryId", diaryId);
         
         return ApiResponse.success("ID生成成功", data);
+    }
+
+    /**
+     * 获取日记列表（分页）
+     * @param pageIndex 页码，从1开始
+     * @param pageSize 每页记录数
+     * @param openid 用户ID (由拦截器注入)
+     * @return 分页的日记列表
+     */
+    @GetMapping("/list")
+    public Map<String, Object> listDiaries(
+            @RequestParam(defaultValue = "1") int pageIndex,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestAttribute("openid") String openid) {
+        
+        try {
+            // 获取目录下该用户的所有日记文件
+            Path dirPath = Paths.get(storagePath);
+            if (!Files.exists(dirPath)) {
+                Files.createDirectories(dirPath);
+            }
+            
+            List<Path> userFiles = new ArrayList<>();
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath, openid + "-*.json")) {
+                for (Path path : stream) {
+                    userFiles.add(path);
+                }
+            }
+            
+            List<Map<String, Object>> allDiaries = new ArrayList<>();
+            
+            // 从每个文件中读取日记数据
+            for (Path filePath : userFiles) {
+                if (!Files.exists(filePath)) {
+                    continue;
+                }
+                
+                // 读取文件内容
+                String content = new String(Files.readAllBytes(filePath));
+                JSONObject json = new JSONObject(content);
+                
+                // 将JSON对象转换为列表
+                Iterator<String> keys = json.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    JSONObject diary = json.getJSONObject(key);
+                    
+                    Map<String, Object> diaryMap = new HashMap<>();
+                    diaryMap.put("key", key);
+                    diaryMap.put("diaryId", diary.optString("diaryId", ""));
+                    diaryMap.put("editorContent", diary.optString("editorContent", ""));
+                    diaryMap.put("createTime", diary.optString("createTime", ""));
+                    diaryMap.put("logTime", diary.optString("logTime", ""));
+                    diaryMap.put("logWeek", diary.optString("logWeek", ""));
+                    diaryMap.put("logLunar", diary.optString("logLunar", ""));
+                    diaryMap.put("address", diary.optString("address", ""));
+                    
+                    // 处理图片URL数组
+                    JSONArray imageUrlsArray = diary.optJSONArray("imageUrls");
+                    List<String> imageUrls = new ArrayList<>();
+                    if (imageUrlsArray != null) {
+                        for (int i = 0; i < imageUrlsArray.length(); i++) {
+                            String fullPath = imageUrlsArray.getString(i);
+                            // 从路径中提取文件名和后缀
+                            String fileName = Paths.get(fullPath).getFileName().toString();
+                            imageUrls.add(fileName);
+                        }
+                    }
+                    diaryMap.put("imageUrls", imageUrls);
+                    allDiaries.add(diaryMap);
+                }
+            }
+            
+            // 如果没有找到任何日记，返回空列表
+            if (allDiaries.isEmpty()) {
+                Map<String, Object> paginationData = createPaginationData(new ArrayList<>(), pageIndex, pageSize, 0);
+                return ApiResponse.success("获取日记列表成功", paginationData);
+            }
+            
+            // 按日期降序排序（最新的日记在前面）
+            allDiaries.sort((d1, d2) -> {
+                String logTime1 = (String) d1.get("logTime");
+                String logTime2 = (String) d2.get("logTime");
+                return logTime2.compareTo(logTime1); // 降序
+            });
+            
+            // 计算总记录数
+            int totalCount = allDiaries.size();
+            
+            // 分页处理
+            int startIndex = (pageIndex - 1) * pageSize;
+            int endIndex = Math.min(startIndex + pageSize, totalCount);
+            
+            List<Map<String, Object>> diaries = new ArrayList<>();
+            if (startIndex < totalCount) {
+                diaries = allDiaries.subList(startIndex, endIndex);
+            }
+            
+            // 构建分页响应数据
+            Map<String, Object> paginationData = createPaginationData(diaries, pageIndex, pageSize, totalCount);
+            
+            return ApiResponse.success("获取日记列表成功", paginationData);
+            
+        } catch (Exception e) {
+            return ApiResponse.error("获取日记列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 删除日记
+     * @param requestData 包含日记ID和创建年份的请求数据
+     * @param openid 用户ID (由拦截器注入)
+     * @return 删除结果
+     */
+    @PostMapping("/delete")
+    public Map<String, Object> deleteDiary(
+            @RequestBody Map<String, Object> requestData,
+            @RequestAttribute("openid") String openid) {
+        
+        String diaryId = (String) requestData.get("diaryId");
+        String createYear = (String) requestData.get("createYear");
+        
+        try {
+            if (diaryId == null || diaryId.isEmpty()) {
+                return ApiResponse.error("日记ID不能为空");
+            }
+            
+            // 获取目录下该用户的所有日记文件
+            Path dirPath = Paths.get(storagePath);
+            if (!Files.exists(dirPath)) {
+                return ApiResponse.error("日记目录不存在");
+            }
+            
+            List<Path> userFiles = new ArrayList<>();
+            
+            // 如果提供了创建年份，直接定位到对应年份的文件
+            if (createYear != null && !createYear.isEmpty()) {
+                Path targetFilePath = dirPath.resolve(openid + "-" + createYear + ".json");
+                if (Files.exists(targetFilePath)) {
+                    userFiles.add(targetFilePath);
+                } else {
+                    return ApiResponse.error("未找到" + createYear + "年的日记文件");
+                }
+            } else {
+                // 否则遍历所有文件
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(dirPath, openid + "-*.json")) {
+                    for (Path path : stream) {
+                        userFiles.add(path);
+                    }
+                }
+            }
+            
+            if (userFiles.isEmpty()) {
+                return ApiResponse.error("未找到用户日记文件");
+            }
+            
+            boolean diaryFound = false;
+            String deletedKey = null;
+            Path modifiedFilePath = null;
+            
+            // 从每个文件中查找并删除日记
+            for (Path filePath : userFiles) {
+                if (!Files.exists(filePath)) {
+                    continue;
+                }
+                
+                // 读取文件内容
+                String content = new String(Files.readAllBytes(filePath));
+                JSONObject json = new JSONObject(content);
+                
+                // 查找包含指定diaryId的日记
+                Iterator<String> keys = json.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    JSONObject diary = json.getJSONObject(key);
+                    
+                    String currentDiaryId = diary.optString("diaryId", "");
+                    if (diaryId.equals(currentDiaryId)) {
+                        // 找到匹配的日记，移除它
+                        keys.remove();
+                        diaryFound = true;
+                        deletedKey = key;
+                        modifiedFilePath = filePath;
+                        break;
+                    }
+                }
+                
+                // 如果找到并删除了日记，更新文件
+                if (diaryFound) {
+                    Files.write(filePath, json.toString().getBytes());
+                    break;
+                }
+            }
+            
+            if (!diaryFound) {
+                return ApiResponse.error("未找到指定ID的日记");
+            }
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("diaryId", diaryId);
+            data.put("key", deletedKey);
+            data.put("file", modifiedFilePath.getFileName().toString());
+            
+            return ApiResponse.success("日记删除成功", data);
+            
+        } catch (Exception e) {
+            return ApiResponse.error("删除日记失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 创建分页数据结构
+     * @param records 当前页的记录
+     * @param pageIndex 当前页码
+     * @param pageSize 每页大小
+     * @param totalCount 总记录数
+     * @return 包含分页信息的数据结构
+     */
+    private Map<String, Object> createPaginationData(List<?> records, int pageIndex, int pageSize, int totalCount) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("records", records);
+        data.put("pageIndex", pageIndex);
+        data.put("pageSize", pageSize);
+        data.put("totalCount", totalCount);
+        data.put("totalPages", (int) Math.ceil((double) totalCount / pageSize));
+        data.put("hasNext", pageIndex * pageSize < totalCount);
+        data.put("hasPrevious", pageIndex > 1);
+        return data;
     }
 }

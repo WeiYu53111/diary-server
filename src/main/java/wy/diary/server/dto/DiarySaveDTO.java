@@ -12,5 +12,6 @@ public class DiarySaveDTO {
     private String logWeek;
     private String logLunar;
     private String address;
+    private String diaryId;
     private String[] imageUrls;
 }
