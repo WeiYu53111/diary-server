@@ -32,5 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-src/main/resources/application.propertiesgit
-diary-server
+diary-server/
+# diary-server下所有文件以及子目录
+diary-server/**   
