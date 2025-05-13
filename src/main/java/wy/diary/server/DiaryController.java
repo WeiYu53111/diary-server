@@ -19,6 +19,10 @@ public class DiaryController {
 
     @PostMapping("/save")
     public Map<String, Object> saveDiary(@RequestBody DiarySaveDTO diaryDto) {
+
+        //增加日志
+        System.out.println("DiaryController.saveDiary() called with: diaryDto = [" + diaryDto + "]");
+
         try {
             // 确保目录存在
             Path dirPath = Paths.get(storagePath);

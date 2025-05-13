@@ -59,7 +59,7 @@ JWT_SECRET是jwt的密钥，请用src/main/java/wy/diary/server/util/JwtUtil.jav
 ```bash
 docker run -d --name diary-server \
 --env-file .env \
--p 8080:8080 \
+-p 7080:7080 \
 -v /data/diary-server/images:/data/images \
 -v /data/diary-server/diary:/data/diary \
 diary-server:0.1
