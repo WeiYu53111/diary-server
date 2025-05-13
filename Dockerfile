@@ -29,13 +29,16 @@ RUN chmod +x ./mvnw
 COPY src ./src
 
 # 构建应用
-RUN ./mvnw package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests
+
+# 构建应用
+# RUN ./mvnw package -DskipTests
 
 # 创建数据目录
 RUN mkdir -p /data/images /data/diary /tmp/images
 
 # 暴露端口（根据application.properties中的配置）
-EXPOSE 8080
+EXPOSE 7080
 
 # 运行应用
 ENTRYPOINT ["java", "-jar", "target/diary-server-0.0.1-SNAPSHOT.jar"]

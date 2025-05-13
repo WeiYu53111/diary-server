@@ -21,7 +21,7 @@ public class ServerApplication {
             public void addInterceptors(InterceptorRegistry registry) {
                 registry.addInterceptor(tokenInterceptor)
                         .addPathPatterns("/api/**") // 应用到所有以 /api 开头的请求
-                        .excludePathPatterns("/api/login","/api/images/view/**"); // 排除登录接口
+                        .excludePathPatterns("/wx/login","/api/images/view/**"); // 排除登录接口
             }
         };
     }

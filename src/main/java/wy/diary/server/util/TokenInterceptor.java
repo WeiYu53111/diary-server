@@ -3,6 +3,7 @@ package wy.diary.server.util;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -14,11 +15,14 @@ public class TokenInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JwtUtil jwtUtil;
+    
+    // 管理员 Token 常量，可以考虑从配置文件中读取
+    @Value("${android.appid}")
+    private String ADMIN_TOKEN;
+    
+    // 管理员标识
+    private static final String ADMIN_ID = "admin";
 
-//    @Override
-//    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-//        return HandlerInterceptor.super.preHandle(request, response, handler);
-//
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
@@ -29,6 +33,16 @@ public class TokenInterceptor implements HandlerInterceptor {
         }
 
         String token = authHeader.substring(7);
+        
+        // 检查是否是管理员 token
+        if (ADMIN_TOKEN.equals(token)) {
+            // 设置管理员标识
+            request.setAttribute("openid", ADMIN_TOKEN);
+            request.setAttribute("isAdmin", true);
+            return true;
+        }
+        
+        // 普通用户 token 验证
         if (!jwtUtil.validateToken(token)) {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             response.getWriter().write("Invalid token.");
@@ -37,15 +51,7 @@ public class TokenInterceptor implements HandlerInterceptor {
 
         String openid = jwtUtil.getOpenidFromToken(token);
         request.setAttribute("openid", openid);
+        request.setAttribute("isAdmin", false);
         return true;
     }
-//
-//    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
-//        // 可以在这里添加后置处理逻辑
-//    }
-//
-//    @Override
-//    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-//        // 可以在这里添加完成处理逻辑
-//    }
 }

@@ -29,8 +29,8 @@ public class ImageController {
     private String storagePath;
 
     @PostMapping("/upload")
-    public Map<String, Object> uploadImage(@RequestParam("file") MultipartFile file, 
-                                          @RequestParam("diaryId") String diaryId,
+    public Map<String, Object> uploadImage(@RequestParam("file") MultipartFile file,
+                                           @RequestParam("diaryId") String diaryId,
                                           @RequestAttribute("openid") String openid) throws IOException {
         Map<String, Object> response = new HashMap<>();
         
