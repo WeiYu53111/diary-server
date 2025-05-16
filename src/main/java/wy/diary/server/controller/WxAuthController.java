@@ -1,4 +1,4 @@
-package wy.diary.server;
+package wy.diary.server.controller;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
