@@ -188,4 +188,45 @@ public class BackupController {
             return ResponseEntity.internalServerError().body(ApiResponse.error("下载备份文件失败: " + e.getMessage()));
         }
     }
+
+    /**
+     * APP报告备份文件已下载完成，清除任务信息
+     * @param taskId 任务ID
+     * @return 清理结果
+     */
+    @GetMapping("/complete/{taskId}")
+    public Map<String, Object> completeBackup(@PathVariable String taskId) {
+        logger.info("收到备份下载完成通知，任务ID: [{}]", taskId);
+        
+        if (!backupTaskStatuses.containsKey(taskId)) {
+            logger.warn("备份完成通知失败: 任务 [{}] 不存在", taskId);
+            return ApiResponse.error("备份任务不存在");
+        }
+        
+        try {
+            // 获取文件路径用于删除
+            String filePath = backupTaskFiles.get(taskId);
+            
+            // 清除任务状态和文件路径映射
+            backupTaskStatuses.remove(taskId);
+            backupTaskFiles.remove(taskId);
+            logger.info("已清除任务 [{}] 的状态信息", taskId);
+            
+            // 可选: 删除备份文件以释放服务器空间
+            if (filePath != null) {
+                File backupFile = new File(filePath);
+                if (backupFile.exists() && backupFile.delete()) {
+                    logger.info("已删除任务 [{}] 的备份文件: {}", taskId, filePath);
+                } else {
+                    logger.warn("无法删除任务 [{}] 的备份文件: {}", taskId, filePath);
+                }
+            }
+            
+            return ApiResponse.success("备份任务已完成并清理", null);
+        } catch (Exception e) {
+            logger.error("清除备份任务 [{}] 信息时发生错误: {}", taskId, e.getMessage(), e);
+            return ApiResponse.error("清除备份任务信息失败: " + e.getMessage());
+        }
+    }
+
 }

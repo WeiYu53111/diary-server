@@ -28,22 +28,22 @@ public class BackupQueueService implements InitializingBean {
         COMPLETED("已完成"),
         EMPTY("空"),
         FAILED("失败");
-        
+
         private final String description;
-        
+
         BackupTaskStatus(String description) {
             this.description = description;
         }
-        
+
         public String getDescription() {
             return description;
         }
-        
+
         @Override
         public String toString() {
             return name();
         }
-        
+
         /**
          * 创建失败状态并附加失败原因
          * @param errorMessage 失败原因
@@ -144,7 +144,7 @@ public class BackupQueueService implements InitializingBean {
             File backupFile = backupService.createUserBackup(task.getOpenid());
             
             // 生成临时文件名
-            String date = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
+            String date = new SimpleDateFormat("yyyyMMdd-HH").format(new Date());
             String filename = "fish-diary-" + task.getOpenid() + "-" + date + ".zip";
             
             // 将文件移动到临时目录
