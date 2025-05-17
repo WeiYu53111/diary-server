@@ -16,6 +16,8 @@ https://github.com/WeiYu53111/diary-wxapp
 - [x] token认证,使用jwt(微信小程序登录)
 - [x] 写日记
 - [x] 历史日记
+- [x] 定时备份
+- [x] 个人备份、备份文件下载
 
 
 # 使用方法
@@ -40,6 +42,7 @@ docker build -t diary-server:0.1 .
 ```bash
 mkdir -p /data/diary-server/images
 mkdir -p /data/diary-server/diary
+mkdir -p /data/diary-server/backups
 ```
 
 ### .env文件
@@ -62,11 +65,9 @@ docker run -d --name diary-server \
 -p 7080:7080 \
 -v /data/diary-server/images:/data/images \
 -v /data/diary-server/diary:/data/diary \
+-v /data/diary-server/backups:/data/backups \
 diary-server:0.1
 ```
-
-
-
 
 
 
