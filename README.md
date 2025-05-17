@@ -10,6 +10,7 @@
 小程序  
 https://github.com/WeiYu53111/diary-wxapp  
 安卓app  
+https://github.com/WeiYu53111/diary-android.git  
 
 
 ## 功能
