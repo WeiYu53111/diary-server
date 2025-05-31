@@ -7,7 +7,7 @@ import java.util.Date;
 public class DiarySaveDTO {
     private String openId;
     private String editorContent;
-    private Date createTime;
+    private String createTime;
     private String logTime;
     private String logWeek;
     private String logLunar;

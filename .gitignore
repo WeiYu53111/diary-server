@@ -34,4 +34,6 @@ build/
 
 diary-server/
 # diary-server下所有文件以及子目录
-diary-server/**   
+diary-server/**
+# diary-server下的所有json文件
+diary-server/**/*.json
