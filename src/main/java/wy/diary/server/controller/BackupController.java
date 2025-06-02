@@ -114,33 +114,57 @@ public class BackupController {
     public Map<String, Object> getBackupStatus(@RequestAttribute("openid") String openid) {
         logger.info("用户 [{}] 请求查询备份任务状态", openid);
 
-        // 根据openid获取任务ID
-        String taskId = "";
-        // 检查是否有备份任务，使用openid作为key前缀
+        // 获取当前日期格式化字符串，用于筛选当天的任务
+        String currentDatePrefix = new SimpleDateFormat("yyyyMMdd").format(new Date());
+        String latestTaskId = "";
+        String latestTimeStamp = "";
+        
+        // 检查是否有备份任务，使用openid作为key前缀，并只获取当天的最新任务
         for (String oldTaskId : backupTaskStatuses.keySet()) {
             if (oldTaskId.startsWith(openid + "-")) {
-                taskId = oldTaskId;
-                break;
+                // 检查任务ID是否包含当天日期,截取key最后10个字符串
+                String processedTaskId = oldTaskId.substring(oldTaskId.length() - 10);
+                if (processedTaskId.startsWith(currentDatePrefix)) {
+                    // 如果是当天的任务，比较时间戳找出最新的
+                    try {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMddHH");
+                        Date taskDate = dateFormat.parse(processedTaskId);
+                        Date latestDate = latestTimeStamp.isEmpty() ? new Date(0) : dateFormat.parse(latestTimeStamp);
+                        
+                        if (taskDate.after(latestDate)) {
+                            latestTimeStamp = processedTaskId;
+                            latestTaskId = oldTaskId;
+                        }
+                    } catch (Exception e) {
+                        logger.warn("解析任务ID日期时出错: {}, {}", oldTaskId, e.getMessage());
+                        // 出错时使用字符串比较作为备选方案
+                        if (processedTaskId.compareTo(latestTimeStamp) > 0) {
+                            latestTimeStamp = processedTaskId;
+                            latestTaskId = oldTaskId;
+                        }
+                    }
+                }
             }
         }
+        
         Map<String, String> data = new HashMap<>();
-        if (taskId.isEmpty()) {
-            logger.info("未找到用户 [{}] 的备份任务", openid);
+        if (latestTaskId.isEmpty()) {
+            logger.info("未找到用户 [{}] 当天的有效备份任务", openid);
             data.put("status", BackupQueueService.BackupTaskStatus.EMPTY.toString());
             return ApiResponse.success("任务状态为空", data);
         }
 
-        String status = backupTaskStatuses.get(taskId);
+        String status = backupTaskStatuses.get(latestTaskId);
         if (status == null) {
-            logger.warn("用户 [{}] 的备份任务 [{}] 存在，但状态为空", openid, taskId);
+            logger.warn("用户 [{}] 的备份任务 [{}] 存在，但状态为空", openid, latestTaskId);
             data.put("status", BackupQueueService.BackupTaskStatus.EMPTY.toString());
             return ApiResponse.success("任务状态为空", data);
         }
         
-        logger.info("用户 [{}] 的备份任务 [{}] 状态为: {}", openid, taskId, status);
+        logger.info("用户 [{}] 的备份任务 [{}] 状态为: {}", openid, latestTaskId, status);
 
         data.put("status", status);
-        data.put("taskId", taskId);
+        data.put("taskId", latestTaskId);
         return ApiResponse.success("获取状态成功", data);
     }
     
