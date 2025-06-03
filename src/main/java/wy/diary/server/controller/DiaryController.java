@@ -3,7 +3,10 @@ package wy.diary.server.controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Value;
 import wy.diary.server.dto.DiarySaveDTO;
+import wy.diary.server.dto.request.DeleteDiaryRequest;
 import wy.diary.server.model.ApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
@@ -13,6 +16,7 @@ import org.json.*;
 @RestController
 @RequestMapping("/api/diary")
 public class DiaryController {
+    private static final Logger logger = LoggerFactory.getLogger(DiaryController.class);
 
     @Value("${diary.storage.path:diary}")
     private String storagePath;
@@ -196,17 +200,17 @@ public class DiaryController {
 
     /**
      * 删除日记
-     * @param requestData 包含日记ID和创建年份的请求数据
+     *
      * @param openid 用户ID (由拦截器注入)
      * @return 删除结果
      */
     @PostMapping("/delete")
     public Map<String, Object> deleteDiary(
-            @RequestBody Map<String, Object> requestData,
+            @RequestBody DeleteDiaryRequest request,
             @RequestAttribute("openid") String openid) {
         
-        String diaryId = (String) requestData.get("diaryId");
-        String createYear = (String) requestData.get("createYear");
+        String diaryId = request.getDiaryId();
+        String createYear = request.getCreateYear();
         
         try {
             if (diaryId == null || diaryId.isEmpty()) {
@@ -245,6 +249,7 @@ public class DiaryController {
             boolean diaryFound = false;
             String deletedKey = null;
             Path modifiedFilePath = null;
+            int imagesDeleted = 0; // 记录删除的图片数量
             
             // 从每个文件中查找并删除日记
             for (Path filePath : userFiles) {
@@ -264,7 +269,28 @@ public class DiaryController {
                     
                     String currentDiaryId = diary.optString("diaryId", "");
                     if (diaryId.equals(currentDiaryId)) {
-                        // 找到匹配的日记，移除它
+                        // 找到匹配的日记，删除相关的图片文件
+                        JSONArray imageUrlsArray = diary.optJSONArray("imageUrls");
+                        if (imageUrlsArray != null && !imageUrlsArray.isEmpty()) {
+                            for (int i = 0; i < imageUrlsArray.length(); i++) {
+                                String imagePath = imageUrlsArray.getString(i);
+                                try {
+                                    // 删除图片文件
+                                    Path imageFilePath = Paths.get(imagePath);
+                                    if (Files.exists(imageFilePath)) {
+                                        Files.delete(imageFilePath);
+                                        logger.info("已删除日记图片: {}", imagePath);
+                                        imagesDeleted++; // 增加删除计数
+                                    } else {
+                                        logger.warn("日记图片不存在，无法删除: {}", imagePath);
+                                    }
+                                } catch (Exception e) {
+                                    logger.error("删除日记图片失败: {}, 错误: {}", imagePath, e.getMessage(), e);
+                                }
+                            }
+                        }
+                        
+                        // 移除日记条目
                         keys.remove();
                         diaryFound = true;
                         deletedKey = key;
@@ -284,12 +310,12 @@ public class DiaryController {
                 return ApiResponse.error("未找到指定ID的日记");
             }
             
-            Map<String, Object> data = new HashMap<>();
-            data.put("diaryId", diaryId);
-            data.put("key", deletedKey);
-            data.put("file", modifiedFilePath.getFileName().toString());
-            
-            return ApiResponse.success("日记删除成功", data);
+//            Map<String, Object> data = new HashMap<>();
+//            data.put("diaryId", diaryId);
+//            data.put("key", deletedKey);
+//            data.put("file", modifiedFilePath.getFileName().toString());
+//            data.put("imagesDeleted", imagesDeleted); // 添加删除的图片数量信息
+            return ApiResponse.success("日记删除成功", true);
             
         } catch (Exception e) {
             return ApiResponse.error("删除日记失败: " + e.getMessage());
