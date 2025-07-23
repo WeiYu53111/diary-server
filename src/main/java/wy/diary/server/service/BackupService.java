@@ -2,14 +2,19 @@ package wy.diary.server.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import wy.diary.server.dao.DiaryDao;
+import wy.diary.server.entity.Diary;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -17,8 +22,8 @@ import java.util.zip.ZipOutputStream;
 public class BackupService implements InitializingBean {
     private static final Logger logger = LoggerFactory.getLogger(BackupService.class);
 
-    @Value("${diary.storage.path}")
-    private String diaryStoragePath;
+    @Autowired
+    private DiaryDao diaryDao;
 
     @Value("${image.storage.path}")
     private String imageStoragePath;
@@ -32,18 +37,13 @@ public class BackupService implements InitializingBean {
     @Value("${backup.cron}")
     private String backupCron;
 
-    @Value("${diary.data.directory:/data/diary}")
-    private String diaryDataDirectory;
-
-    @Value("${diary.images.directory:/data/images}")
-    private String diaryImagesDirectory;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // 实现 InitializingBean 接口的方法，替代 @PostConstruct
     @Override
     public void afterPropertiesSet() {
         logger.info("BackupService 初始化完成，定时备份配置为: {}", backupCron);
         logger.info("备份存储路径: {}", backupStorePath);
-        logger.info("日记存储路径: {}", diaryStoragePath);
         logger.info("图片存储路径: {}", imageStoragePath);
     }
 
@@ -62,7 +62,7 @@ public class BackupService implements InitializingBean {
     }
 
     /**
-     * 执行备份操作
+     * 执行全量备份操作 - 从数据库读取所有用户数据
      */
     public void createBackup() throws IOException {
         // 确保备份目录存在
@@ -76,14 +76,16 @@ public class BackupService implements InitializingBean {
         String backupFileName = "fish-diary-" + dateFormat.format(new Date()) + ".zip";
         String backupFilePath = backupStorePath + backupFileName;
 
-        logger.info("正在创建备份文件: {}", backupFilePath);
+        logger.info("正在创建全量备份文件: {}", backupFilePath);
 
         // 创建ZIP文件
         try (ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(backupFilePath))) {
-            // 备份日记文件
-            File diaryDir = new File(diaryStoragePath);
-            if (diaryDir.exists()) {
-                addFolderToZip(diaryDir, "diary/", zipOut);
+            // 从数据库获取所有用户数据并按用户分组备份
+            List<String> allOpenIds = diaryDao.getAllDistinctOpenIds();
+            logger.info("共发现 {} 个用户需要备份", allOpenIds.size());
+
+            for (String openId : allOpenIds) {
+                backupUserDataToZip(zipOut, openId);
             }
 
             // 备份图片文件
@@ -93,14 +95,137 @@ public class BackupService implements InitializingBean {
             }
         }
 
-        logger.info("备份文件创建成功: {}", backupFilePath);
+        logger.info("全量备份文件创建成功: {}", backupFilePath);
+    }
+
+    /**
+     * 将用户数据备份到ZIP文件中（按用户和年份分文件）
+     */
+    private void backupUserDataToZip(ZipOutputStream zipOut, String openId) throws IOException {
+        try {
+            // 获取用户所有日记数据，按年份分组
+            Map<String, List<Diary>> diariesByYear = getDiariesGroupedByYear(openId);
+            
+            if (diariesByYear.isEmpty()) {
+                logger.debug("用户 {} 没有日记数据", openId);
+                return;
+            }
+
+            // 为每个年份创建一个JSON文件
+            for (Map.Entry<String, List<Diary>> entry : diariesByYear.entrySet()) {
+                String year = entry.getKey();
+                List<Diary> diaries = entry.getValue();
+                
+                // 创建JSON文件名，格式：{openid}-年份.json
+                String fileName = openId + "-" + year + ".json";
+                
+                // 将日记转换为原有JSON格式
+                JSONObject yearData = convertDiariesToJsonFormat(diaries);
+                
+                // 添加JSON文件到ZIP
+                ZipEntry entry1 = new ZipEntry("diary/" + fileName);
+                zipOut.putNextEntry(entry1);
+                zipOut.write(yearData.toString(2).getBytes("UTF-8"));
+                zipOut.closeEntry();
+                
+                logger.debug("已备份用户 {} 的 {} 年数据，共 {} 条日记", openId, year, diaries.size());
+            }
+        } catch (Exception e) {
+            logger.error("备份用户 {} 数据失败", openId, e);
+        }
+    }
+
+    /**
+     * 获取用户日记数据，按年份分组
+     */
+    private Map<String, List<Diary>> getDiariesGroupedByYear(String openId) {
+        Map<String, List<Diary>> groupedDiaries = new HashMap<>();
+        
+        try {
+            // 获取用户所有日记（不分页）
+            List<Diary> allDiaries = diaryDao.getDiariesByOpenId(openId);
+            
+            // 按年份分组
+            for (Diary diary : allDiaries) {
+                String logTime = diary.getLogTime();
+                if (logTime != null && logTime.length() >= 4) {
+                    String year = logTime.substring(0, 4);
+                    groupedDiaries.computeIfAbsent(year, k -> new ArrayList<>()).add(diary);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("获取用户 {} 的日记数据失败", openId, e);
+        }
+        
+        return groupedDiaries;
+    }
+
+    /**
+     * 将数据库日记数据转换为原有的JSON格式
+     */
+    private JSONObject convertDiariesToJsonFormat(List<Diary> diaries) {
+        JSONObject jsonData = new JSONObject();
+        
+        // 用于生成key的计数器，按日期分组
+        Map<String, Integer> dateCounters = new HashMap<>();
+        
+        for (Diary diary : diaries) {
+            try {
+                String logTime = diary.getLogTime(); // 格式：YYYY-MM-DD
+                if (logTime == null) continue;
+                
+                // 生成key，格式：YYYY-MM-DDXX（XX是同一天的序号）
+                String dateKey = logTime.replace("-", "");
+                int sequence = dateCounters.getOrDefault(dateKey, 0) + 1;
+                dateCounters.put(dateKey, sequence);
+                String key = dateKey + String.format("%02d", sequence);
+                
+                // 创建日记JSON对象
+                JSONObject diaryJson = new JSONObject();
+                diaryJson.put("diaryId", diary.getDiaryId());
+                diaryJson.put("editorContent", diary.getEditorContent() != null ? diary.getEditorContent() : "");
+                diaryJson.put("createTime", diary.getCreateTime() != null ? diary.getCreateTime() : "");
+                diaryJson.put("logTime", diary.getLogTime() != null ? diary.getLogTime() : "");
+                diaryJson.put("logWeek", diary.getLogWeek() != null ? diary.getLogWeek() : "");
+                diaryJson.put("logLunar", diary.getLogLunar() != null ? diary.getLogLunar() : "");
+                diaryJson.put("address", diary.getAddress() != null ? diary.getAddress() : "");
+                
+                // 处理图片URL数组
+                List<String> imageUrls = parseImageUrls(diary.getImageUrls());
+                diaryJson.put("imageUrls", imageUrls);
+                
+                jsonData.put(key, diaryJson);
+            } catch (Exception e) {
+                logger.error("转换日记数据失败，diaryId: {}", diary.getDiaryId(), e);
+            }
+        }
+        
+        return jsonData;
+    }
+
+    /**
+     * 解析图片URL JSON字符串
+     */
+    private List<String> parseImageUrls(String imageUrlsJson) {
+        try {
+            if (imageUrlsJson == null || imageUrlsJson.trim().isEmpty() || "[]".equals(imageUrlsJson.trim())) {
+                return new ArrayList<>();
+            }
+            return objectMapper.readValue(imageUrlsJson, List.class);
+        } catch (Exception e) {
+            logger.error("解析图片URL失败: {}", imageUrlsJson, e);
+            return new ArrayList<>();
+        }
     }
 
     /**
      * 添加目录到ZIP文件
      */
     private void addFolderToZip(File folder, String parentPath, ZipOutputStream zipOut) throws IOException {
-        for (File file : folder.listFiles()) {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        
+        for (File file : files) {
             if (file.isDirectory()) {
                 addFolderToZip(file, parentPath + file.getName() + "/", zipOut);
                 continue;
@@ -115,6 +240,7 @@ public class BackupService implements InitializingBean {
                 while ((length = fis.read(bytes)) >= 0) {
                     zipOut.write(bytes, 0, length);
                 }
+                zipOut.closeEntry();
             }
         }
     }
@@ -147,14 +273,13 @@ public class BackupService implements InitializingBean {
                 logger.warn("无法删除旧备份文件: {}", backupFiles[i].getName());
             }
         }
-        logger.info("旧备份文件清理完成,剩余备份文件数量: {}", backupFiles.length - maxBackupHistory);
-        logger.info("删除的备份文件名: {}", backupFiles[backupFiles.length - 1].getName());
+        logger.info("旧备份文件清理完成,剩余备份文件数量: {}", Math.min(backupFiles.length, maxBackupHistory));
     }
 
     /**
-     * 为指定用户创建备份，压缩包含其日记和图片
+     * 为指定用户创建备份 - 从数据库读取数据
      * 
-     * @param userId 用户ID
+     * @param userId 用户ID（openId）
      * @return 创建的备份文件
      * @throws IOException 如果备份过程中出现IO异常
      */
@@ -165,31 +290,11 @@ public class BackupService implements InitializingBean {
         File tempFile = File.createTempFile("user-backup-"+userId, ".zip");
         
         try (ZipOutputStream zipOut = new ZipOutputStream(new FileOutputStream(tempFile))) {
-            // 基于文件名模式查找用户日记文件
-            File diaryDataDir = new File(diaryDataDirectory);
-            // 检查目录是否存在
-            if (!diaryDataDir.exists() || !diaryDataDir.isDirectory()) {
-                logger.warn("日记数据目录不存在: {}", diaryDataDirectory);
-            } else {
-                // 查找用户的所有日记文件（格式：userId+年份.json）
-                File[] userDiaryFiles = diaryDataDir.listFiles((dir, name) -> 
-                    name.startsWith(userId) && name.endsWith(".json"));
-                
-                if (userDiaryFiles != null && userDiaryFiles.length > 0) {
-                    logger.info("找到用户 {} 的日记文件 {} 个", userId, userDiaryFiles.length);
-                    
-                    // 添加日记文件到ZIP
-                    for (File diaryFile : userDiaryFiles) {
-                        addFileToZip(zipOut, diaryFile, "diary/" + diaryFile.getName());
-                        logger.debug("已添加日记文件到备份: {}", diaryFile.getName());
-                    }
-                } else {
-                    logger.warn("未找到用户 {} 的日记文件", userId);
-                }
-            }
+            // 备份用户日记数据
+            backupUserDataToZip(zipOut, userId);
             
             // 用户图片目录
-            File userImagesDir = new File(diaryImagesDirectory, userId);
+            File userImagesDir = new File(imageStoragePath, userId);
             
             // 检查并备份图片目录
             if (userImagesDir.exists() && userImagesDir.isDirectory()) {
@@ -204,29 +309,6 @@ public class BackupService implements InitializingBean {
         return tempFile;
     }
 
-    /**
-     * 添加单个文件到ZIP
-     * 
-     * @param zipOut ZIP输出流
-     * @param file 要添加的文件
-     * @param entryPath ZIP内的路径
-     * @throws IOException 如果添加过程中出现IO异常
-     */
-    private void addFileToZip(ZipOutputStream zipOut, File file, String entryPath) throws IOException {
-        ZipEntry entry = new ZipEntry(entryPath);
-        zipOut.putNextEntry(entry);
-        
-        byte[] buffer = new byte[8192]; // 8KB buffer
-        try (FileInputStream fis = new FileInputStream(file)) {
-            int length;
-            while ((length = fis.read(buffer)) > 0) {
-                zipOut.write(buffer, 0, length);
-            }
-        }
-        
-        zipOut.closeEntry();
-    }
-    
     /**
      * 递归地将目录及其内容添加到ZIP文件中
      * 

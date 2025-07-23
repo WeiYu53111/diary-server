@@ -37,3 +37,4 @@ diary-server/
 diary-server/**
 # diary-server下的所有json文件
 diary-server/**/*.json
+/mysql/
