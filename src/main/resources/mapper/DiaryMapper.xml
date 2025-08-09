@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="wy.diary.server.mapper.DiaryMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="wy.diary.server.entity.Diary">
+        <id column="id" jdbcType="BIGINT" property="id"/>
+        <result column="diary_id" jdbcType="VARCHAR" property="diaryId"/>
+        <result column="open_id" jdbcType="VARCHAR" property="openId"/>
+        <result column="editor_content" jdbcType="CLOB" property="editorContent"/>
+        <result column="create_time" jdbcType="VARCHAR" property="createTime"/>
+        <result column="log_time" jdbcType="VARCHAR" property="logTime"/>
+        <result column="log_week" jdbcType="VARCHAR" property="logWeek"/>
+        <result column="log_lunar" jdbcType="VARCHAR" property="logLunar"/>
+        <result column="address" jdbcType="VARCHAR" property="address"/>
+        <result column="image_urls" jdbcType="CLOB" property="imageUrls"/>
+        <result column="db_create_time" jdbcType="TIMESTAMP" property="dbCreateTime"/>
+        <result column="db_update_time" jdbcType="TIMESTAMP" property="dbUpdateTime"/>
+        <result column="deleted" jdbcType="TINYINT" property="deleted"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, diary_id, open_id, editor_content, create_time, log_time, log_week, 
+        log_lunar, address, image_urls, db_create_time, db_update_time, deleted
+    </sql>
+
+    <!-- 插入日记 -->
+    <insert id="insert" parameterType="wy.diary.server.entity.Diary" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO diary (
+            diary_id, open_id, editor_content, create_time, log_time, log_week,
+            log_lunar, address, image_urls, db_create_time, db_update_time, deleted
+        ) VALUES (
+            #{diaryId}, #{openId}, #{editorContent}, #{createTime}, #{logTime}, #{logWeek},
+            #{logLunar}, #{address}, #{imageUrls}, NOW(), NOW(), 0
+        )
+    </insert>
+
+    <!-- 根据ID查询日记 -->
+    <select id="selectById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 根据日记ID查询日记 -->
+    <select id="selectByDiaryId" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE diary_id = #{diaryId} AND deleted = 0
+    </select>
+
+    <!-- 根据用户OpenID分页查询日记列表 -->
+    <select id="selectByOpenIdWithPage" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE open_id = #{openId} AND deleted = 0
+        ORDER BY log_time DESC, db_create_time DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- 根据用户OpenID查询日记总数 -->
+    <select id="countByOpenId" parameterType="java.lang.String" resultType="int">
+        SELECT COUNT(*)
+        FROM diary
+        WHERE open_id = #{openId} AND deleted = 0
+    </select>
+
+    <!-- 更新日记 -->
+    <update id="updateById" parameterType="wy.diary.server.entity.Diary">
+        UPDATE diary
+        <set>
+            <if test="editorContent != null">editor_content = #{editorContent},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="logTime != null">log_time = #{logTime},</if>
+            <if test="logWeek != null">log_week = #{logWeek},</if>
+            <if test="logLunar != null">log_lunar = #{logLunar},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="imageUrls != null">image_urls = #{imageUrls},</if>
+            db_update_time = NOW()
+        </set>
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 逻辑删除日记 -->
+    <update id="deleteById" parameterType="java.lang.Long">
+        UPDATE diary
+        SET deleted = 1, db_update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 根据日记ID逻辑删除日记 -->
+    <update id="deleteByDiaryId" parameterType="java.lang.String">
+        UPDATE diary
+        SET deleted = 1, db_update_time = NOW()
+        WHERE diary_id = #{diaryId} AND deleted = 0
+    </update>
+
+    <!-- 根据用户OpenID和年份查询日记列表 -->
+    <select id="selectByOpenIdAndYear" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE open_id = #{openId} 
+        AND log_time LIKE CONCAT(#{year}, '%')
+        AND deleted = 0
+        ORDER BY log_time DESC, db_create_time DESC
+    </select>
+
+    <!-- 根据用户OpenID查询所有日记（不分页） -->
+    <select id="selectByOpenId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE open_id = #{openId} AND deleted = 0
+        ORDER BY log_time DESC, db_create_time DESC
+    </select>
+
+    <!-- 查询所有不重复的用户OpenID -->
+    <select id="selectAllDistinctOpenIds" resultType="java.lang.String">
+        SELECT DISTINCT open_id
+        FROM diary
+        WHERE deleted = 0
+        ORDER BY open_id
+    </select>
+
+    <!-- 查询所有日记数据（用于全量备份） -->
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM diary
+        WHERE deleted = 0
+        ORDER BY open_id, log_time DESC, db_create_time DESC
+    </select>
+
+</mapper> 

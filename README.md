@@ -20,6 +20,7 @@ https://github.com/WeiYu53111/diary-android.git
 - [x] 定时备份
 - [x] 个人备份、备份文件下载
 - [x] MySQL数据库存储
+- [x] **AI智能待做事项分析** ⭐ 新增功能
 
 
 # 使用方法
@@ -102,6 +103,13 @@ JWT_SECRET=xxxx
 DB_URL=jdbc:mysql://diary-mysql:3306/diary_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8
 DB_USERNAME=diary
 DB_PASSWORD=diary123
+
+# AI分析配置（可选）
+AI_API_URL=                       # AI API URL（留空使用模拟数据）
+AI_API_KEY=                       # AI API Key
+AI_MODEL=gpt-3.5-turbo           # AI模型
+TODO_ANALYSIS_ENABLED=true       # 是否启用待做事项分析功能
+TODO_ANALYSIS_CRON=0 0 1 * * ?   # 定时任务执行时间
 ```
 
 配置说明：
@@ -109,6 +117,7 @@ DB_PASSWORD=diary123
 - 如果使用安卓app作为前端，必须需要配置ANDROID_APPID
 - JWT_SECRET是jwt的密钥，请用src/main/java/wy/diary/server/util/JwtUtil.java 代码生成
 - 数据库配置中的主机名要使用Docker容器名`diary-mysql`
+- AI分析配置为可选项，不配置时使用模拟数据
 
 ### 5. 运行应用docker镜像
 ```bash
@@ -142,6 +151,26 @@ diary-server:0.1
 
 数据库表结构定义在 `src/main/resources/sql/diary_schema.sql` 中，容器启动时会自动执行初始化脚本。
 
+## 待做事项数据 ⭐ 新增
+待做事项数据存储在MySQL数据库中的`todo_item`表中，包含以下字段：
+
+- `id`: 主键ID（自增）
+- `open_id`: 用户OpenID
+- `title`: 事项标题
+- `description`: 事项描述
+- `category`: 事项类别（PROJECT-项目，HABIT-习惯养成）
+- `priority`: 优先级（LOW/MEDIUM/HIGH/URGENT）
+- `status`: 状态（PENDING/IN_PROGRESS/COMPLETED/CANCELLED）
+- `due_date`: 截止日期
+- `estimated_duration`: 预计完成时长（分钟）
+- `source_diary_ids`: 来源日记ID列表（JSON格式）
+- `ai_confidence`: AI分析置信度(0.00-1.00)
+- `ai_analysis_result`: AI分析详细结果（JSON格式）
+- `created_date`: 创建日期
+- `db_create_time`: 数据库创建时间
+- `db_update_time`: 数据库更新时间
+- `deleted`: 逻辑删除标识（0-未删除，1-已删除）
+
 ## 图片数据
 图片存储在/data/diary-server/images目录下
 以openid/年份/日期+日记id 的形式存储, 例如：diary-server/images/{openid}/2025/20250513_140340_4118b233-560e-4c16-8f21-0f96cfb75e99.jpg
@@ -152,6 +181,125 @@ diary-server:0.1
 - 定时备份：每天早上7点自动备份数据库数据到 `/data/diary-server/backups/` 目录
 - 手动备份：用户可以通过接口触发个人数据备份，生成包含个人所有日记和图片的压缩文件
 - 备份文件保留最近3个版本，超过数量会自动删除最早的备份
+
+---
+
+# AI智能待做事项分析功能 ⭐ 新增
+
+基于用户日记内容，智能分析并生成个性化的待做事项列表，帮助用户将想法转化为行动。
+
+## 功能特性
+
+- **智能分析**：基于用户日记内容，通过AI分析提取潜在的待做事项
+- **事项分类**：自动将事项分为项目（PROJECT）和习惯养成（HABIT）两大类
+- **优先级管理**：智能设置事项优先级（LOW/MEDIUM/HIGH/URGENT）
+- **定时分析**：每日凌晨1点自动分析活跃用户的日记，生成待做事项
+- **手动触发**：支持手动触发分析功能
+
+## API接口
+
+### 待做事项管理
+
+- `GET /api/todo/list?openId={openId}` - 查询用户待做事项列表
+- `GET /api/todo/list/category?openId={openId}&category={category}` - 根据类别查询
+- `GET /api/todo/list/status?openId={openId}&status={status}` - 根据状态查询
+- `GET /api/todo/list/dateRange?openId={openId}&startDate={date}&endDate={date}` - 根据日期范围查询
+- `GET /api/todo/{id}` - 查询待做事项详情
+- `POST /api/todo/create` - 创建待做事项
+- `PUT /api/todo/update` - 更新待做事项
+- `PUT /api/todo/updateStatus?id={id}&status={status}` - 更新状态
+- `DELETE /api/todo/{id}` - 删除待做事项
+
+### AI分析功能
+
+- `POST /api/todo/analyze?openId={openId}` - 手动触发AI分析
+- `POST /api/todo/analyze/all` - 触发全局分析任务
+
+## 定时任务
+
+系统会在每日凌晨1点自动执行分析任务：
+- 获取最近30天内有日记的活跃用户
+- 分析每个用户最近7天的日记内容
+- 生成相应的待做事项并保存到数据库
+
+## AI分析实现说明
+
+系统支持通过HTTP请求调用外部AI服务（如Dify、n8n等工作流平台）进行日记内容分析。当外部AI服务不可用时，会自动降级使用模拟数据。
+
+### 外部AI服务集成
+- **HTTP调用**：支持POST请求调用外部AI分析服务
+- **数据格式**：发送JSON格式的日记内容给外部服务
+- **错误处理**：网络异常或服务不可用时自动使用模拟数据
+- **超时控制**：设置合理的请求超时时间
+
+### 请求格式
+发送给外部AI服务的数据格式：
+```json
+{
+  "diaries": [
+    {
+      "date": "2025-01-15",
+      "content": "日记内容..."
+    }
+  ],
+  "analysisType": "todo_extraction",
+  "categories": ["PROJECT", "HABIT"]
+}
+```
+
+### 响应格式
+期望外部AI服务返回的数据格式：
+```json
+{
+  "todos": [
+    {
+      "title": "待做事项标题",
+      "description": "详细描述",
+      "category": "PROJECT或HABIT",
+      "priority": "优先级",
+      "estimatedDuration": 120,
+      "dueDate": "2025-01-20",
+      "confidence": 0.85
+    }
+  ]
+}
+```
+
+## 配置选项
+
+在`application.properties`中可配置以下参数：
+
+```properties
+# AI分析配置
+ai.api.url=                    # AI API URL（留空使用模拟数据）
+ai.api.key=                    # AI API Key
+ai.model=gpt-3.5-turbo        # AI模型
+
+# 待做事项分析配置
+todo.analysis.enabled=true                 # 是否启用分析功能
+todo.analysis.cron=0 0 1 * * ?             # 定时任务执行时间
+```
+
+## 使用示例
+
+```bash
+# 查询用户待做事项
+curl "http://localhost:7080/api/todo/list?openId=user123"
+
+# 手动触发AI分析
+curl -X POST "http://localhost:7080/api/todo/analyze?openId=user123"
+
+# 创建待做事项
+curl -X POST "http://localhost:7080/api/todo/create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "openId": "user123",
+    "title": "完成项目报告",
+    "description": "整理本周工作内容并提交报告",
+    "category": "PROJECT",
+    "priority": "HIGH"
+  }'
+```
 
 
 

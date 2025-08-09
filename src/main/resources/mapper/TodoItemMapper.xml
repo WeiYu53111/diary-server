@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="wy.diary.server.mapper.TodoItemMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="TodoItemResultMap" type="wy.diary.server.entity.TodoItem">
+        <id column="id" property="id"/>
+        <result column="open_id" property="openId"/>
+        <result column="title" property="title"/>
+        <result column="description" property="description"/>
+        <result column="category" property="category"/>
+        <result column="priority" property="priority"/>
+        <result column="status" property="status"/>
+        <result column="due_date" property="dueDate"/>
+        <result column="estimated_duration" property="estimatedDuration"/>
+        <result column="source_diary_ids" property="sourceDiaryIds"/>
+        <result column="ai_confidence" property="aiConfidence"/>
+        <result column="ai_analysis_result" property="aiAnalysisResult"/>
+        <result column="created_date" property="createdDate"/>
+        <result column="db_create_time" property="dbCreateTime"/>
+        <result column="db_update_time" property="dbUpdateTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <!-- 基础查询列 -->
+    <sql id="Base_Column_List">
+        id, open_id, title, description, category, priority, status, due_date, 
+        estimated_duration, source_diary_ids, ai_confidence, ai_analysis_result, 
+        created_date, db_create_time, db_update_time, deleted
+    </sql>
+
+    <!-- 插入待做事项 -->
+    <insert id="insert" parameterType="wy.diary.server.entity.TodoItem" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO todo_item (
+            open_id, title, description, category, priority, status, due_date,
+            estimated_duration, source_diary_ids, ai_confidence, ai_analysis_result, created_date
+        ) VALUES (
+            #{openId}, #{title}, #{description}, #{category}, #{priority}, #{status}, #{dueDate},
+            #{estimatedDuration}, #{sourceDiaryIds}, #{aiConfidence}, #{aiAnalysisResult}, #{createdDate}
+        )
+    </insert>
+
+    <!-- 批量插入待做事项 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO todo_item (
+            open_id, title, description, category, priority, status, due_date,
+            estimated_duration, source_diary_ids, ai_confidence, ai_analysis_result, created_date
+        ) VALUES
+        <foreach collection="todoItems" item="item" separator=",">
+            (#{item.openId}, #{item.title}, #{item.description}, #{item.category}, #{item.priority}, 
+             #{item.status}, #{item.dueDate}, #{item.estimatedDuration}, #{item.sourceDiaryIds}, 
+             #{item.aiConfidence}, #{item.aiAnalysisResult}, #{item.createdDate})
+        </foreach>
+    </insert>
+
+    <!-- 根据ID查询 -->
+    <select id="selectById" parameterType="java.lang.Long" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE id = #{id} AND deleted = 0
+    </select>
+
+    <!-- 根据用户OpenID查询 -->
+    <select id="selectByOpenId" parameterType="java.lang.String" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE open_id = #{openId} AND deleted = 0
+        ORDER BY priority DESC, due_date ASC, db_create_time DESC
+    </select>
+
+    <!-- 根据用户OpenID和类别查询 -->
+    <select id="selectByOpenIdAndCategory" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE open_id = #{openId} AND category = #{category} AND deleted = 0
+        ORDER BY priority DESC, due_date ASC, db_create_time DESC
+    </select>
+
+    <!-- 根据用户OpenID和状态查询 -->
+    <select id="selectByOpenIdAndStatus" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE open_id = #{openId} AND status = #{status} AND deleted = 0
+        ORDER BY priority DESC, due_date ASC, db_create_time DESC
+    </select>
+
+    <!-- 根据用户OpenID和创建日期查询 -->
+    <select id="selectByOpenIdAndCreatedDate" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE open_id = #{openId} AND created_date = #{createdDate} AND deleted = 0
+        ORDER BY priority DESC, due_date ASC, db_create_time DESC
+    </select>
+
+    <!-- 根据用户OpenID和日期范围查询 -->
+    <select id="selectByOpenIdAndDateRange" resultMap="TodoItemResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM todo_item
+        WHERE open_id = #{openId} AND created_date BETWEEN #{startDate} AND #{endDate} AND deleted = 0
+        ORDER BY priority DESC, due_date ASC, db_create_time DESC
+    </select>
+
+    <!-- 更新待做事项 -->
+    <update id="update" parameterType="wy.diary.server.entity.TodoItem">
+        UPDATE todo_item
+        <set>
+            <if test="title != null">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="category != null">category = #{category},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="dueDate != null">due_date = #{dueDate},</if>
+            <if test="estimatedDuration != null">estimated_duration = #{estimatedDuration},</if>
+            <if test="sourceDiaryIds != null">source_diary_ids = #{sourceDiaryIds},</if>
+            <if test="aiConfidence != null">ai_confidence = #{aiConfidence},</if>
+            <if test="aiAnalysisResult != null">ai_analysis_result = #{aiAnalysisResult},</if>
+        </set>
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 更新状态 -->
+    <update id="updateStatus">
+        UPDATE todo_item
+        SET status = #{status}
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!-- 逻辑删除 -->
+    <update id="deleteById" parameterType="java.lang.Long">
+        UPDATE todo_item
+        SET deleted = 1
+        WHERE id = #{id}
+    </update>
+
+    <!-- 根据用户OpenID逻辑删除 -->
+    <update id="deleteByOpenId" parameterType="java.lang.String">
+        UPDATE todo_item
+        SET deleted = 1
+        WHERE open_id = #{openId}
+    </update>
+
+</mapper> 
