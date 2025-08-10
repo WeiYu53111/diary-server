@@ -16,7 +16,6 @@ services:
     volumes:
       - ./data/mysql:/var/lib/mysql
       - ./src/main/resources/sql:/docker-entrypoint-initdb.d:ro
-      - ./mysql-init.sql:/docker-entrypoint-initdb.d/mysql-init.sql:ro
     networks:
       - diary-network
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
