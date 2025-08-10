@@ -30,38 +30,78 @@ https://github.com/WeiYu53111/diary-android.git
 - MySQL 8.0+
 - Docker (可选)
 
-## 直接打包运行
+## Docker Compose部署
+
+### 快速开始
+```bash
+# 1. 复制环境变量配置文件
+cp .env.example .env
+
+# 2. 编辑.env文件，配置你的实际参数
+vim .env
+
+# 3. 一键启动所有服务（MySQL + 应用服务）
+docker-compose up -d
+
+# 4. 查看服务状态
+docker-compose ps
+
+# 5. 查看应用日志
+docker-compose logs -f diary-server
+```
+
+### 环境变量配置
+编辑`.env`文件，重要配置项如下：
+```bash
+# 数据库配置
+MYSQL_ROOT_PASSWORD=your_strong_root_password
+MYSQL_PASSWORD=your_strong_db_password
+
+# JWT密钥配置（必填，建议64位以上随机字符串）
+JWT_SECRET=your_very_long_and_secure_jwt_secret_key_here
+
+# 微信小程序配置（如果使用）
+WX_APPID=your_wechat_miniprogram_appid
+WX_SECRET=your_wechat_miniprogram_secret
+
+# 安卓app配置（如果使用）
+ANDROID_APPID=your_android_app_id
+
+# AI分析配置（可选）
+AI_API_URL=                       # AI API URL（留空使用模拟数据）
+AI_API_KEY=                       # AI API Key
+TODO_ANALYSIS_ENABLED=true       # 是否启用AI分析功能
+```
+
+### 常用操作
+```bash
+# 停止所有服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 查看日志
+docker-compose logs diary-server
+docker-compose logs mysql
+
+# 更新应用（重新构建）
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+### 数据持久化
+所有重要数据都通过Docker卷进行持久化：
+- MySQL数据库文件
+- 用户上传的图片
+- 数据备份文件
+- 日记数据文件
+
+## 传统Docker部署
 
 ### 1. 启动MySQL数据库
 ```bash
-# 启动MySQL容器，并初始化数据库
-docker run -d --name diary-mysql \
--e MYSQL_ROOT_PASSWORD=123456 \
--e MYSQL_DATABASE=diary_db \
--e MYSQL_USER=diary \
--e MYSQL_PASSWORD=diary123 \
--p 3306:3306 \
--v $(pwd)/src/main/resources/sql:/docker-entrypoint-initdb.d \
--v /data/mysql:/var/lib/mysql \
-mysql:8.0 \
---character-set-server=utf8mb4 \
---collation-server=utf8mb4_unicode_ci
-```
-
-### 2. 打包运行应用
-```bash
-# 打包
-./mvnw package -DskipTests
-
-# 运行
-java -jar target/diary-server-0.0.1-SNAPSHOT.jar
-```
-
-## Docker部署
-
-### 1. 启动MySQL数据库
-```bash
-# 启动MySQL容器，并初始化数据库
 docker run -d --name diary-mysql \
 -e MYSQL_ROOT_PASSWORD=123456 \
 -e MYSQL_DATABASE=diary_db \
@@ -70,57 +110,20 @@ docker run -d --name diary-mysql \
 -p 3306:3306 \
 -v $(pwd)/src/main/resources/sql:/docker-entrypoint-initdb.d \
 -v $(pwd)/mysql:/var/lib/mysql \
-mysql:8.4 \
+mysql:8.0 \
 --character-set-server=utf8mb4 \
 --collation-server=utf8mb4_unicode_ci
 ```
 
-### 2. 构建应用docker镜像
+### 2. 构建并运行应用
 ```bash
+# 构建镜像
 docker build -t diary-server:0.1 .
-```
 
-### 3. 创建本地映射目录
-```bash
-mkdir -p /data/diary-server/images
-mkdir -p /data/diary-server/backups
-```
+# 创建数据目录
+mkdir -p /data/diary-server/{images,backups}
 
-### 4. 配置环境变量文件
-敏感的信息放在.env文件中，docker run时会自动加载, 文件模板如下
-```bash
-# 微信小程序配置（如果使用微信小程序前端）
-WX_APPID=xxxxx
-WX_SECRET=xxxxxx
-
-# 安卓app配置（如果使用安卓app前端）
-ANDROID_APPID=xxxx
-
-# JWT密钥配置（必填）
-JWT_SECRET=xxxx
-
-# 数据库配置
-DB_URL=jdbc:mysql://diary-mysql:3306/diary_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8
-DB_USERNAME=diary
-DB_PASSWORD=diary123
-
-# AI分析配置（可选）
-AI_API_URL=                       # AI API URL（留空使用模拟数据）
-AI_API_KEY=                       # AI API Key
-AI_MODEL=gpt-3.5-turbo           # AI模型
-TODO_ANALYSIS_ENABLED=true       # 是否启用待做事项分析功能
-TODO_ANALYSIS_CRON=0 0 1 * * ?   # 定时任务执行时间
-```
-
-配置说明：
-- 如果使用微信小程序作为前端，必须需要配置WX_APPID和WX_SECRET
-- 如果使用安卓app作为前端，必须需要配置ANDROID_APPID
-- JWT_SECRET是jwt的密钥，请用src/main/java/wy/diary/server/util/JwtUtil.java 代码生成
-- 数据库配置中的主机名要使用Docker容器名`diary-mysql`
-- AI分析配置为可选项，不配置时使用模拟数据
-
-### 5. 运行应用docker镜像
-```bash
+# 运行应用
 docker run -d --name diary-server \
 --env-file .env \
 --link diary-mysql:mysql \

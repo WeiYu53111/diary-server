@@ -32,6 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 
+### Docker & Environment ###
+.env
+.env.local
+.env.*.local
+
 diary-server/
 # diary-server下所有文件以及子目录
 diary-server/**

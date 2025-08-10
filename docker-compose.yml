@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # MySQL数据库服务
+  mysql:
+    image: mysql:8.4.5
+    container_name: diary-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-diary_db}
+      MYSQL_USER: ${MYSQL_USER:-diary}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-diary123}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./src/main/resources/sql:/docker-entrypoint-initdb.d:ro
+    networks:
+      - diary-network
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # 日记服务端应用
+  diary-server:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WX_APPID: ${WX_APPID:-请填写小程序appid}
+        WX_SECRET: ${WX_SECRET:-请填写小程序secret}
+        JWT_SECRET: ${JWT_SECRET:-请填写jwt密钥}
+    container_name: diary-server-app
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-7080}:7080"
+    environment:
+      # 数据库连接配置
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-diary_db}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8
+      DB_USERNAME: ${MYSQL_USER:-diary}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-diary123}
+      
+      # JWT配置
+      JWT_SECRET: ${JWT_SECRET:-请填写jwt密钥}
+      
+      # 微信小程序配置
+      WX_APPID: ${WX_APPID:-请填写小程序appid}
+      WX_SECRET: ${WX_SECRET:-请填写小程序secret}
+      
+      # 安卓app配置
+      ANDROID_APPID: ${ANDROID_APPID:-请填写安卓appId}
+      
+      # AI分析配置
+      AI_API_URL: ${AI_API_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-3.5-turbo}
+      TODO_ANALYSIS_ENABLED: ${TODO_ANALYSIS_ENABLED:-true}
+      TODO_ANALYSIS_CRON: ${TODO_ANALYSIS_CRON:-0 0 1 * * ?}
+      
+      # 存储路径配置
+      IMAGE_STORAGE_PATH: /data/images/
+      DIARY_STORAGE_PATH: /data/diary/
+      BACKUP_STORE_PATH: /data/backups/
+      BACKUP_TEMP_DIRECTORY: /data/temp/
+    volumes:
+      # 数据持久化 - 绑定挂载到宿主机指定路径
+      - ./data/images:/data/images
+      - ./data/diary:/data/diary  
+      - ./data/backups:/data/backups
+      - ./data/temp:/data/temp
+    networks:
+      - diary-network
+    depends_on:
+      - mysql
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# 网络配置
+networks:
+  diary-network:
+    driver: bridge

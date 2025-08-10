@@ -33,6 +33,32 @@ java -jar target/diary-server-0.0.1-SNAPSHOT.jar
 ```
 
 ### Docker操作
+
+#### 方式1：使用Docker Compose（推荐）
+```bash
+# 1. 复制环境变量配置文件
+cp .env.example .env
+
+# 2. 编辑.env文件，填写你的实际配置
+vim .env
+
+# 3. 启动所有服务（MySQL + 应用服务）
+docker-compose up -d
+
+# 4. 查看服务状态
+docker-compose ps
+
+# 5. 查看应用日志
+docker-compose logs -f diary-server
+
+# 6. 停止所有服务
+docker-compose down
+
+# 7. 停止并删除数据卷（慎用！会清除所有数据）
+docker-compose down -v
+```
+
+#### 方式2：传统Docker命令
 ```bash
 # 构建Docker镜像
 docker build -t diary-server:0.1 .
