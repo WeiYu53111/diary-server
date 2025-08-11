@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # MySQL数据库服务
   mysql:
-    image: mysql:8.4.5
+    image: mysql:8.4
     container_name: diary-mysql
     restart: unless-stopped
     environment:
@@ -18,17 +18,25 @@ services:
       - ./src/main/resources/sql:/docker-entrypoint-initdb.d:ro
     networks:
       - diary-network
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # 添加 MySQL 健康检查
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
 
   # 日记服务端应用
   diary-server:
     build: 
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ${DOCKERFILE:-Dockerfile}
       args:
         WX_APPID: ${WX_APPID:-请填写小程序appid}
         WX_SECRET: ${WX_SECRET:-请填写小程序secret}
         JWT_SECRET: ${JWT_SECRET:-请填写jwt密钥}
+        MAVEN_CACHE_PATH: ${MAVEN_CACHE_PATH:-/root/.m2}
     container_name: diary-server-app
     restart: unless-stopped
     ports:
@@ -69,14 +77,16 @@ services:
       - ./data/temp:/data/temp
     networks:
       - diary-network
+    # 修改依赖配置，等待 MySQL 健康检查通过
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7080/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
 # 网络配置
 networks:

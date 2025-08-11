@@ -8,6 +8,7 @@ WORKDIR /app
 ARG WX_APPID
 ARG WX_SECRET
 ARG JWT_SECRET
+ARG MAVEN_CACHE_PATH=/root/.m2
 
 # 设置环境变量
 ENV WX_APPID=${WX_APPID}
@@ -29,7 +30,7 @@ RUN chmod +x ./mvnw
 COPY src ./src
 
 # 构建应用
-RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests
+RUN --mount=type=cache,target=${MAVEN_CACHE_PATH} ./mvnw package -DskipTests
 
 # 构建应用
 # RUN ./mvnw package -DskipTests
