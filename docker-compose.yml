@@ -31,7 +31,7 @@ services:
   diary-server:
     build: 
       context: .
-      dockerfile: ${DOCKERFILE:-Dockerfile}
+      dockerfile: Dockerfile
       args:
         WX_APPID: ${WX_APPID:-请填写小程序appid}
         WX_SECRET: ${WX_SECRET:-请填写小程序secret}
