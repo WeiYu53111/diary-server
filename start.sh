@@ -23,7 +23,7 @@ fi
 
 # 启动服务
 echo "🚀 启动Docker Compose服务..."
-docker-compose up -d --build
+docker compose up -d --build --pull never
 
 # 检查启动状态
 if [ $? -eq 0 ]; then
