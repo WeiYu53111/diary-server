@@ -11,6 +11,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-diary_db}
       MYSQL_USER: ${MYSQL_USER:-diary}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-diary123}
+      # 时区配置
+      TZ: Asia/Shanghai
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -69,6 +71,9 @@ services:
       DIARY_STORAGE_PATH: /data/diary/
       BACKUP_STORE_PATH: /data/backups/
       BACKUP_TEMP_DIRECTORY: /data/temp/
+      
+      # 时区配置
+      TZ: Asia/Shanghai
     volumes:
       # 数据持久化 - 绑定挂载到宿主机指定路径
       - ./data/images:/data/images

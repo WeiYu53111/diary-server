@@ -4,6 +4,10 @@ FROM openjdk:17-jdk-slim
 # 设置工作目录
 WORKDIR /app
 
+# 设置时区为亚洲/上海
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # 设置构建参数
 ARG WX_APPID
 ARG WX_SECRET
@@ -26,11 +30,28 @@ COPY .mvn/ .mvn/
 # 为mvnw脚本添加执行权限
 RUN chmod +x ./mvnw
 
+# 配置Maven使用阿里云仓库
+RUN mkdir -p /root/.m2 && \
+    echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 \
+          http://maven.apache.org/xsd/settings-1.0.0.xsd"> \
+      <mirrors> \
+        <mirror> \
+          <id>aliyunmaven</id> \
+          <mirrorOf>*</mirrorOf> \
+          <name>阿里云公共仓库</name> \
+          <url>https://maven.aliyun.com/repository/public</url> \
+        </mirror> \
+      </mirrors> \
+    </settings>' > /root/.m2/settings.xml
+
 # 复制源代码
 COPY src ./src
 
-# 构建应用
-RUN --mount=type=cache,target=${MAVEN_CACHE_PATH} ./mvnw package -DskipTests
+# 构建应用 - 挂载宿主机Maven仓库
+#RUN --mount=type=bind,source=${MAVEN_CACHE_PATH},target=/root/.m2 ./mvnw package -DskipTests
+RUN --mount=type=cache,target=/root/.m2 ./mvnw package -DskipTests
 
 # 构建应用
 # RUN ./mvnw package -DskipTests
